@@ -1,12 +1,24 @@
 {
   "name": "kyrin",
-  "module": "index.ts",
+  "version": "0.0.1",
+  "description": "High-performance TypeScript web framework for Bun",
+  "main": "src/index.ts",
   "type": "module",
-  "private": true,
-  "devDependencies": {
-    "@types/bun": "latest"
+  "scripts": {
+    "dev":"bun run --watch src/index.ts",
+    "build":"bun build src/index.ts --outfile dist",
+    "test" :"bun test",
+    "lint":"tsc --noEmit"
   },
-  "peerDependencies": {
+  "keywords": ["framework","bun","typescript"],
+  "author": {
+    "name": "A70III",
+    "url": "https://github.com/A70III"
+  },
+  "license": "MIT",
+  "dependencies": {},
+  "devDependencies": {
+    "@types/bun": "latest",
     "typescript": "^5"
   }
 }
