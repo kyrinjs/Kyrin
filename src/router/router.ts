@@ -1,30 +1,124 @@
 /**
  * Kyrin Framework - Router
- *
- * Router ที่รองรับ HTTP methods โดยใช้ RadixTree
+ * HTTP routing with RadixTree for O(k) lookups
  */
 
-import type { Handler, LookupResult, HttpMethod } from "@/core/types";
+import type { Handler, LookupResult, HttpMethod } from "../core/types";
 import { RadixTree } from "./radix-tree";
 
+/** Route definition for grouping */
+interface RouteDefinition {
+  method: HttpMethod;
+  path: string;
+  handler: Handler;
+}
+
 /**
- * Router class จัดการ routes สำหรับทุก HTTP methods
+ * Router class for HTTP method routing
+ * Uses RadixTree for fast path matching with static route caching
  */
 export class Router {
-  /** Radix trees สำหรับแต่ละ HTTP method */
-  private trees: Map<HttpMethod, RadixTree>;
+  /** RadixTree for each HTTP method */
+  private trees: Map<HttpMethod, RadixTree> = new Map();
 
-  /** Cache สำหรับ static routes (optimization) */
-  private staticRoutes: Map<HttpMethod, Map<string, Handler>>;
+  /** O(1) cache for static routes */
+  private staticRoutes: Map<HttpMethod, Map<string, Handler>> = new Map();
 
-  constructor() {
-    this.trees = new Map();
-    this.staticRoutes = new Map();
+  /** Stored routes for grouping */
+  private routes: RouteDefinition[] = [];
+
+  // ==================== Route Registration ====================
+
+  /**
+   * Register a route for any HTTP method
+   * @param method - HTTP method (GET, POST, etc.)
+   * @param path - Route path (e.g., "/users/:id")
+   * @param handler - Request handler function
+   */
+  on(method: HttpMethod, path: string, handler: Handler): this {
+    this.routes.push({ method, path, handler });
+
+    // Cache static routes for O(1) lookup
+    if (!path.includes(":") && !path.includes("*")) {
+      this.getStaticRoutes(method).set(path, handler);
+    }
+
+    this.getTree(method).insert(path, handler);
+    return this;
   }
 
   /**
-   * ดึงหรือสร้าง RadixTree สำหรับ method ที่กำหนด
+   * Find matching route for method and path
+   * @returns Handler and params if found, null otherwise
    */
+  match(method: HttpMethod, path: string): LookupResult | null {
+    // Try static cache first (O(1))
+    const staticRoute = this.staticRoutes.get(method)?.get(path);
+    if (staticRoute) {
+      return { handler: staticRoute, params: {} };
+    }
+
+    // Fall back to tree lookup (O(k))
+    const tree = this.trees.get(method);
+    return tree?.lookup(path) ?? null;
+  }
+
+  /**
+   * Get all registered routes (for grouping)
+   */
+  getRoutes(): RouteDefinition[] {
+    return this.routes;
+  }
+
+  // ==================== HTTP Method Shortcuts ====================
+
+  get(path: string, handler: Handler): this {
+    return this.on("GET", path, handler);
+  }
+
+  post(path: string, handler: Handler): this {
+    return this.on("POST", path, handler);
+  }
+
+  put(path: string, handler: Handler): this {
+    return this.on("PUT", path, handler);
+  }
+
+  delete(path: string, handler: Handler): this {
+    return this.on("DELETE", path, handler);
+  }
+
+  patch(path: string, handler: Handler): this {
+    return this.on("PATCH", path, handler);
+  }
+
+  options(path: string, handler: Handler): this {
+    return this.on("OPTIONS", path, handler);
+  }
+
+  head(path: string, handler: Handler): this {
+    return this.on("HEAD", path, handler);
+  }
+
+  /** Register handler for all HTTP methods */
+  all(path: string, handler: Handler): this {
+    const methods: HttpMethod[] = [
+      "GET",
+      "POST",
+      "PUT",
+      "DELETE",
+      "PATCH",
+      "OPTIONS",
+      "HEAD",
+    ];
+    for (const method of methods) {
+      this.on(method, path, handler);
+    }
+    return this;
+  }
+
+  // ==================== Private Helpers ====================
+
   private getTree(method: HttpMethod): RadixTree {
     let tree = this.trees.get(method);
     if (!tree) {
@@ -34,9 +128,6 @@ export class Router {
     return tree;
   }
 
-  /**
-   * ดึงหรือสร้าง cache สำหรับ static routes
-   */
   private getStaticRoutes(method: HttpMethod): Map<string, Handler> {
     let routes = this.staticRoutes.get(method);
     if (!routes) {
@@ -44,78 +135,5 @@ export class Router {
       this.staticRoutes.set(method, routes);
     }
     return routes;
-  }
-
-  /**
-   * ลงทะเบียน route สำหรับ method ใดๆ
-   */
-  // ✅ ควรเช็คก่อน cache
-  on(method: HttpMethod, path: string, handler: Handler) {
-    // Static routes cache เฉพาะ routes ที่ไม่มี dynamic segments
-    if (!path.includes(":") && !path.includes("*")) {
-      this.getStaticRoutes(method).set(path, handler);
-    }
-    this.getTree(method).insert(path, handler);
-  }
-
-  /**
-   * ค้นหา route ที่ตรงกับ method และ path
-   */
-  match(method: HttpMethod, path: string): LookupResult | null {
-    // ลอง static cache ก่อน (O(1))
-    const staticRoute = this.getStaticRoutes(method).get(path);
-    if (staticRoute) {
-      return { handler: staticRoute, params: {} };
-    }
-    // ค้นหาใน tree (O(k))
-    const tree = this.getTree(method);
-    const result = tree.lookup(path);
-    if (result) {
-      return { handler: result.handler, params: result.params };
-    }
-    return null;
-  }
-
-  // ==================== HTTP Method Shortcuts ====================
-  get(path: string, handler: Handler) {
-    this.on("GET", path, handler);
-  }
-
-  post(path: string, handler: Handler) {
-    this.on("POST", path, handler);
-  }
-
-  put(path: string, handler: Handler) {
-    this.on("PUT", path, handler);
-  }
-
-  delete(path: string, handler: Handler) {
-    this.on("DELETE", path, handler);
-  }
-
-  patch(path: string, handler: Handler) {
-    this.on("PATCH", path, handler);
-  }
-
-  options(path: string, handler: Handler) {
-    this.on("OPTIONS", path, handler);
-  }
-
-  head(path: string, handler: Handler) {
-    this.on("HEAD", path, handler);
-  }
-
-  /**
-   * ลงทะเบียนหลาย methods พร้อมกัน
-   * @example router.all('/users', handler) // GET, POST, PUT, DELETE ทั้งหมด
-   */
-  all(path: string, handler: Handler) {
-    this.on("GET", path, handler);
-    this.on("POST", path, handler);
-    this.on("PUT", path, handler);
-    this.on("DELETE", path, handler);
-    this.on("PATCH", path, handler);
-    this.on("OPTIONS", path, handler);
-    this.on("HEAD", path, handler);
   }
 }

@@ -1,5 +1,5 @@
 /**
- * Kyrin Framework - Main Entry Point
+ * Kyrin Framework - Main Application Class
  * Minimal Web Framework for Bun
  */
 
@@ -9,9 +9,20 @@ import type {
   HttpMethod,
   KyrinConfig,
 } from "./types";
-import { Router } from "@/router/router";
-import { Context } from "@/context";
+import { Router } from "../router/router";
+import { Context } from "../context/context";
 
+/**
+ * Kyrin Application
+ * Main entry point for creating web applications
+ *
+ * @example
+ * ```typescript
+ * const app = new Kyrin();
+ * app.get("/", () => ({ message: "Hello!" }));
+ * app.listen(3000);
+ * ```
+ */
 export class Kyrin {
   private router: Router;
   private config: KyrinConfig;
@@ -25,7 +36,7 @@ export class Kyrin {
     };
   }
 
-  // ==================== Routing Methods ====================
+  // ==================== Route Methods ====================
 
   get(path: string, handler: Handler): this {
     this.router.get(path, handler);
@@ -72,13 +83,37 @@ export class Kyrin {
     return this;
   }
 
-  // ==================== Auto Response Detection ====================
+  // ==================== Route Groups ====================
 
   /**
-   * Convert handler result to Response automatically
-   * - Response → return as-is
-   * - object → JSON response
-   * - string → text response
+   * Mount a router with a prefix
+   * @param prefix - URL prefix for all routes in the router
+   * @param router - Router instance containing routes
+   *
+   * @example
+   * ```typescript
+   * const userRouter = new Router();
+   * userRouter.get("/", handler);      // GET /users
+   * userRouter.get("/:id", handler);   // GET /users/:id
+   *
+   * app.route("/users", userRouter);
+   * ```
+   */
+  route(prefix: string, router: Router): this {
+    const routes = router.getRoutes();
+    for (const route of routes) {
+      this.on(route.method, `${prefix}${route.path}`, route.handler);
+    }
+    return this;
+  }
+
+  // ==================== Response Helpers ====================
+
+  /**
+   * Auto-detect response type and convert to Response
+   * - Response → as-is
+   * - object → JSON
+   * - string → text/plain
    * - null/void → 204 No Content
    */
   private toResponse(result: HandlerResponse): Response {
@@ -93,7 +128,6 @@ export class Kyrin {
     if (result === null || result === undefined) {
       return new Response(null, { status: 204 });
     }
-    // object → JSON
     return new Response(JSON.stringify(result), {
       headers: { "Content-Type": "application/json" },
     });
@@ -101,31 +135,28 @@ export class Kyrin {
 
   // ==================== Request Handler ====================
 
-  private async handleRequest(req: Request): Promise<Response> {
+  private handleRequest(req: Request): Response | Promise<Response> {
     const method = req.method as HttpMethod;
     const url = req.url;
 
-    /**
-     * @optimize_from_1st_benchmark
-     * แทนที่จะ parse URL ทั้งหมด แค่หา path จาก string
-     */
-    const pathEnd = url.indexOf("?");
+    // Fast path extraction (avoids new URL())
+    const queryIndex = url.indexOf("?");
+    const pathStart = url.indexOf("/", 8);
     const path =
-      pathEnd === -1
-        ? url.slice(url.indexOf("/", 8))
-        : url.slice(url.indexOf("/", 8), pathEnd);
+      queryIndex === -1
+        ? url.slice(pathStart)
+        : url.slice(pathStart, queryIndex);
+
     const result = this.router.match(method, path);
 
     if (result) {
       const ctx = new Context(req, result.params);
       try {
-        /**
-         * @optimize_from_1st_benchmark
-         * นำ await ออกจาก try-catch เพื่อให้ไม่ต้องรอ handler ที่ไม่ส่ง response
-         */
         const handlerResult = result.handler(ctx);
+
+        // Avoid async overhead for sync handlers
         if (handlerResult instanceof Promise) {
-          return this.toResponse(await handlerResult);
+          return handlerResult.then((r) => this.toResponse(r));
         }
         return this.toResponse(handlerResult);
       } catch (error) {
@@ -139,6 +170,10 @@ export class Kyrin {
 
   // ==================== Server ====================
 
+  /**
+   * Start the HTTP server
+   * @param port - Port number (overrides config)
+   */
   listen(port?: number): void {
     const finalPort = port ?? this.config.port!;
     const hostname = this.config.hostname!;
@@ -154,6 +189,6 @@ export class Kyrin {
       },
     });
 
-    // console.log(`🚀 Kyrin running at http://${hostname}:${finalPort}`);
+    console.log(`🚀 Kyrin running at http://${hostname}:${finalPort}`);
   }
 }

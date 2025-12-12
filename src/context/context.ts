@@ -1,33 +1,28 @@
 /**
  * Kyrin Framework - Context
- * ศูนย์กลางการจัดการ Request/Response
+ * Request/Response handling for route handlers
  */
 
 export class Context {
   readonly req: Request;
   private _url?: URL;
-  params: Record<string, string>;
+  readonly params: Record<string, string>;
 
   constructor(req: Request, params: Record<string, string> = {}) {
     this.req = req;
     this.params = params;
   }
 
-  // ==================== Request Helpers ====================
+  // ==================== Request Properties ====================
 
-  /** HTTP Method */
+  /** HTTP Method (GET, POST, etc.) */
   get method(): string {
     return this.req.method;
   }
 
-  /** Request path */
+  /** Request pathname */
   get path(): string {
     return this.url.pathname;
-  }
-
-  /** Get request header */
-  header(name: string): string | null {
-    return this.req.headers.get(name);
   }
 
   /** All request headers */
@@ -35,43 +30,57 @@ export class Context {
     return this.req.headers;
   }
 
-  /** Lazy URL parsing */
-  private get url(): URL {
-    return (this._url ??= new URL(this.req.url));
+  // ==================== Request Helpers ====================
+
+  /** Get a specific request header */
+  header(name: string): string | null {
+    return this.req.headers.get(name);
   }
 
-  /** Get path parameter */
+  /** Get path parameter (e.g., :id) */
   param(key: string): string | null {
     return this.params[key] ?? null;
   }
 
-  /** Get query parameter */
+  /** Get query parameter (e.g., ?page=1) */
   query(key: string): string | null {
     return this.url.searchParams.get(key);
   }
 
-  /** Get JSON body */
-  async body<T = any>(): Promise<T> {
+  // ==================== Body Parsing ====================
+
+  /**
+   * Parse request body as JSON
+   * @example
+   * const data = await c.body<{ name: string }>();
+   * const { name, email } = await c.body();
+   */
+  async body<T = unknown>(): Promise<T> {
     return (await this.req.json()) as T;
   }
 
-  /** Get text body */
-  async bodyText(): Promise<string> {
+  /** Get request body as raw text */
+  async text(): Promise<string> {
     return await this.req.text();
+  }
+
+  /** Get request body as FormData */
+  async formData() {
+    return await this.req.formData();
   }
 
   // ==================== Response Helpers ====================
 
   /** Send JSON response */
-  json<T = any>(data: T, status = 200): Response {
+  json<T = unknown>(data: T, status = 200): Response {
     return new Response(JSON.stringify(data), {
       status,
       headers: { "Content-Type": "application/json" },
     });
   }
 
-  /** Send text response */
-  text(data: string, status = 200): Response {
+  /** Send plain text response */
+  send(data: string, status = 200): Response {
     return new Response(data, {
       status,
       headers: { "Content-Type": "text/plain" },
@@ -86,7 +95,7 @@ export class Context {
     });
   }
 
-  /** Redirect response */
+  /** Redirect to another URL */
   redirect(url: string, status = 302): Response {
     return new Response(null, {
       status,
@@ -94,8 +103,14 @@ export class Context {
     });
   }
 
-  /** 404 Not Found response */
+  /** Return 404 Not Found */
   notFound(): Response {
     return new Response("Not Found", { status: 404 });
+  }
+
+  // ==================== Private ====================
+
+  private get url(): URL {
+    return (this._url ??= new URL(this.req.url));
   }
 }
