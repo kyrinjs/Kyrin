@@ -27,3 +27,13 @@ export { Router } from "./router/router";
 
 // Context
 export { Context } from "./context/context";
+
+// Database
+export { Database, database, SQLiteClient } from "./db";
+export type {
+  DatabaseConfig,
+  DatabaseClient,
+  SQLiteConfig,
+  RunResult,
+  PreparedStatement,
+} from "./db";
