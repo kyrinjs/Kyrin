@@ -6,7 +6,13 @@ export interface KyrinConfig {
   development?: boolean;
 }
 
-export type Handler = (ctx: Context) => Response | Promise<Response>;
+/** Handler response types for auto-detection */
+export type HandlerResponse = Response | object | string | null | void;
+
+/** Route handler function */
+export type Handler = (
+  ctx: Context
+) => HandlerResponse | Promise<HandlerResponse>;
 
 export type LookupResult = { handler: Handler; params: Record<string, string> };
 

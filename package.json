@@ -13,7 +13,6 @@
     "lint": "tsc --noEmit",
     "prepublishOnly": "bun run build"
   },
-
   "keywords": [
     "bun",
     "framework",

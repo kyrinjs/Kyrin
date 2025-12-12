@@ -1,36 +1,49 @@
 /**
- * Kyrin Framework
- * Entry Point - Example Usage
+ * Kyrin Framework - Example Usage
  */
 import { Kyrin } from "./core/kyrin";
 
 const app = new Kyrin({ development: true });
 
-// ✨ Minimal API Example
-app.get("/", (c) => c.text("Hello Kyrin! 🚀"));
+// ✨ Minimal API Examples
 
-app.get("/json", (c) => c.json({ message: "Hello World" }));
+// Auto JSON - just return an object!
+app.get("/", () => ({ message: "Hello Kyrin! 🚀" }));
 
-app.get("/users/:id", (c) => {
-  const id = c.param("id");
-  return c.json({ id, name: "John Doe" });
-});
+// Auto Text - just return a string!
+app.get("/text", () => "Hello World!");
 
-app.get("/users/:userId/posts/:postId", (c) => {
-  return c.json({
-    userId: c.param("userId"),
-    postId: c.param("postId"),
-  });
-});
+// Traditional way - still works!
+app.get("/json", (c) => c.json({ status: "ok" }));
 
+// Path params with destructuring
+app.get("/users/:id", (c) => ({
+  id: c.param("id"),
+  name: "John Doe",
+}));
+
+// Nested params
+app.get("/users/:userId/posts/:postId", (c) => ({
+  userId: c.param("userId"),
+  postId: c.param("postId"),
+}));
+
+// Query params
+app.get("/search", (c) => ({
+  query: c.query("q"),
+  page: c.query("page") ?? "1",
+}));
+
+// POST with body
 app.post("/users", async (c) => {
   const body = await c.body<{ name: string }>();
   return c.json({ created: body.name }, 201);
 });
 
-app.get("/search", (c) => {
-  const q = c.query("q");
-  return c.json({ query: q });
-});
+// Redirect
+app.get("/old", (c) => c.redirect("/"));
+
+// 204 No Content - return null
+app.delete("/users/:id", () => null);
 
 app.listen(3000);

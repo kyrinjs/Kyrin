@@ -4,83 +4,98 @@
  */
 
 export class Context {
-  // เก็บ Request,Response ต้นฉบับไว้ เผื่อคนใช้อยากเข้าถึงแบบดิบๆ
   readonly req: Request;
-
-  // เก็บ URL Object (จะสร้างเมื่อจำเป็นเท่านั้น - Lazy)
   private _url?: URL;
+  params: Record<string, string>;
 
-  // เก็บ Path Param
-  params?: Record<string, string>;
-
-  constructor(req: Request, params?: Record<string, string>) {
+  constructor(req: Request, params: Record<string, string> = {}) {
     this.req = req;
-    if (params) this.params = params;
+    this.params = params;
   }
 
-  // --- ส่วนจัดการขาเข้า (Request Helpers) ---
-  // Expose path โดยตรง (minimal!)
-  public get path(): string {
-    return this.url.pathname;
-  }
+  // ==================== Request Helpers ====================
 
+  /** HTTP Method */
   get method(): string {
     return this.req.method;
   }
 
-  // Getter สำหรับดึง URL Object (Lazy Loading)
-  // ถ้ายังไม่เคยเรียกใช้ จะ new URL() ให้
-  // ถ้าเคยเรียกแล้ว จะเอาตัวเดิมมาใช้ (ประหยัด CPU)
+  /** Request path */
+  get path(): string {
+    return this.url.pathname;
+  }
+
+  /** Get request header */
+  header(name: string): string | null {
+    return this.req.headers.get(name);
+  }
+
+  /** All request headers */
+  get headers(): Headers {
+    return this.req.headers;
+  }
+
+  /** Lazy URL parsing */
   private get url(): URL {
-    if (!this._url) {
-      this._url = new URL(this.req.url); // ทำงานแค่ครั้งแรกที่เรียก
-    }
-    return this._url;
+    return (this._url ??= new URL(this.req.url));
   }
 
-  // path param
+  /** Get path parameter */
   param(key: string): string | null {
-    return this.params?.[key] || null;
+    return this.params[key] ?? null;
   }
 
-  // query param
+  /** Get query parameter */
   query(key: string): string | null {
     return this.url.searchParams.get(key);
   }
 
-  // ดึง Body แบบ JSON (async)
+  /** Get JSON body */
   async body<T = any>(): Promise<T> {
     return (await this.req.json()) as T;
   }
 
-  // --- ส่วนจัดการขาออก (Response Helpers) ---
-  //   ตอบ json
-  public json(data: any, status?: number) {
+  /** Get text body */
+  async bodyText(): Promise<string> {
+    return await this.req.text();
+  }
+
+  // ==================== Response Helpers ====================
+
+  /** Send JSON response */
+  json<T = any>(data: T, status = 200): Response {
     return new Response(JSON.stringify(data), {
-      headers: {
-        "Content-Type": "application/json",
-      },
-      status: status || 200,
+      status,
+      headers: { "Content-Type": "application/json" },
     });
   }
 
-  //   ตอบ text
-  public text(data: string, status?: number) {
+  /** Send text response */
+  text(data: string, status = 200): Response {
     return new Response(data, {
-      headers: {
-        "Content-Type": "text/plain",
-      },
-      status: status || 200,
+      status,
+      headers: { "Content-Type": "text/plain" },
     });
   }
 
-  //   ตอบ html
-  public html(data: string, status?: number) {
+  /** Send HTML response */
+  html(data: string, status = 200): Response {
     return new Response(data, {
-      headers: {
-        "Content-Type": "text/html",
-      },
-      status: status || 200,
+      status,
+      headers: { "Content-Type": "text/html" },
     });
+  }
+
+  /** Redirect response */
+  redirect(url: string, status = 302): Response {
+    return new Response(null, {
+      status,
+      headers: { Location: url },
+    });
+  }
+
+  /** 404 Not Found response */
+  notFound(): Response {
+    return new Response("Not Found", { status: 404 });
   }
 }
