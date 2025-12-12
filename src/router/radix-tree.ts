@@ -9,7 +9,6 @@ interface RadixNode {
   children: Map<string, RadixNode>;
   handler: Handler | null;
   paramName: string | null;
-  isWildcard: boolean;
   paramChild: RadixNode | null;
   wildcardChild: RadixNode | null;
 }
@@ -24,7 +23,6 @@ function createNode(path: string = ""): RadixNode {
     children: new Map(),
     handler: null,
     paramName: null,
-    isWildcard: false,
     paramChild: null,
     wildcardChild: null,
   };
@@ -45,8 +43,13 @@ export class RadixTree {
    * @example '/users/:id/posts' → ['users', ':id', 'posts']
    */
   private splitPath(path: string): string[] {
-    // Remove leading and trailing slashes
-    return path.replace(/^\/+|\/+$/g, "").split("/");
+    /**
+     * @optimize_from_1st_benchmark
+     * เปลี่ยนเป็น - ไม่ใช้ Regex
+     */
+    const start = path.startsWith("/") ? 1 : 0;
+    const end = path.endsWith("/") ? path.length - 1 : path.length;
+    return path.slice(start, end).split("/");
   }
 
   /**
@@ -71,7 +74,6 @@ export class RadixTree {
         // Wildcard node
         if (!currentNode.wildcardChild) {
           const wildcardNode = createNode();
-          wildcardNode.isWildcard = true;
           currentNode.wildcardChild = wildcardNode;
         }
         currentNode = currentNode.wildcardChild;

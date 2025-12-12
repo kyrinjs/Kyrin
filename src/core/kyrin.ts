@@ -102,16 +102,31 @@ export class Kyrin {
   // ==================== Request Handler ====================
 
   private async handleRequest(req: Request): Promise<Response> {
-    const url = new URL(req.url);
     const method = req.method as HttpMethod;
-    const path = url.pathname;
+    const url = req.url;
 
+    /**
+     * @optimize_from_1st_benchmark
+     * แทนที่จะ parse URL ทั้งหมด แค่หา path จาก string
+     */
+    const pathEnd = url.indexOf("?");
+    const path =
+      pathEnd === -1
+        ? url.slice(url.indexOf("/", 8))
+        : url.slice(url.indexOf("/", 8), pathEnd);
     const result = this.router.match(method, path);
 
     if (result) {
       const ctx = new Context(req, result.params);
       try {
-        const handlerResult = await result.handler(ctx);
+        /**
+         * @optimize_from_1st_benchmark
+         * นำ await ออกจาก try-catch เพื่อให้ไม่ต้องรอ handler ที่ไม่ส่ง response
+         */
+        const handlerResult = result.handler(ctx);
+        if (handlerResult instanceof Promise) {
+          return this.toResponse(await handlerResult);
+        }
         return this.toResponse(handlerResult);
       } catch (error) {
         console.error("Handler Error:", error);
@@ -139,6 +154,6 @@ export class Kyrin {
       },
     });
 
-    console.log(`🚀 Kyrin running at http://${hostname}:${finalPort}`);
+    // console.log(`🚀 Kyrin running at http://${hostname}:${finalPort}`);
   }
 }
