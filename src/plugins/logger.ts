@@ -10,11 +10,20 @@ export interface LoggerOptions {
   logRequests?: boolean;
   /** Enable response logging */
   logResponses?: boolean;
-  /** Enable server startup logging */
-  logServerStart?: boolean;
   /** Custom prefix for logs */
   prefix?: string;
 }
+
+/**
+ * Helper function to get formatted timestamp
+ */
+const getTimestamp = (): string => new Date().toISOString();
+
+/**
+ * Helper function to format log messages
+ */
+const formatLog = (prefix: string, timestamp: string, message: string): string =>
+  `${prefix} ${timestamp} ${message}`;
 
 /**
  * Logger Plugin
@@ -27,7 +36,6 @@ export const logger: PluginFactory<LoggerOptions> = (options = {}) => {
   const config = {
     logRequests: true,
     logResponses: false,
-    logServerStart: true,
     prefix: "[Kyrin]",
     ...options,
   };
@@ -36,16 +44,22 @@ export const logger: PluginFactory<LoggerOptions> = (options = {}) => {
     name: "logger",
     onRequest: config.logRequests
       ? (c) => {
-          const timestamp = new Date().toISOString();
-          console.log(`${config.prefix} ${timestamp} ${c.method} ${c.path}`);
+          const log = formatLog(
+            config.prefix,
+            getTimestamp(),
+            `${c.method} ${c.path}`
+          );
+          console.log(log);
         }
       : undefined,
     onResponse: config.logResponses
       ? (c) => {
-          const timestamp = new Date().toISOString();
-          console.log(
-            `${config.prefix} ${timestamp} Response sent for ${c.method} ${c.path}`
+          const log = formatLog(
+            config.prefix,
+            getTimestamp(),
+            `Response sent for ${c.method} ${c.path}`
           );
+          console.log(log);
         }
       : undefined,
   };
