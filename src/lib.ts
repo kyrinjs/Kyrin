@@ -4,9 +4,10 @@
  *
  * @example
  * ```typescript
- * import { Kyrin, Router } from "kyrin";
+ * import { Kyrin, cors } from "kyrin";
  *
  * const app = new Kyrin();
+ * app.use(cors());
  * app.get("/", () => ({ message: "Hello!" }));
  * app.listen(3000);
  * ```
@@ -37,3 +38,16 @@ export type {
   RunResult,
   PreparedStatement,
 } from "./db";
+
+// Middleware
+export type {
+  MiddlewareHandler,
+  HookHandler,
+  KyrinPlugin,
+  PluginFactory,
+} from "./middleware";
+export { compose } from "./middleware";
+
+// Plugins
+export { cors } from "./plugins";
+export type { CorsOptions } from "./plugins";

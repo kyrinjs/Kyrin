@@ -1,6 +1,6 @@
 {
   "name": "kyrin",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "A high-performance, batteries-included framework for Bun. Built to eliminate decision fatigue.",
   "type": "module",
   "main": "./dist/lib.js",

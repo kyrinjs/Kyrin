@@ -8,6 +8,15 @@ export class Context {
   private _url?: URL;
   readonly params: Record<string, string>;
 
+  /** Shared store for middleware data */
+  store: Record<string, unknown> = {};
+
+  /** Response options (headers, status) */
+  set = {
+    status: 200,
+    headers: {} as Record<string, string>,
+  };
+
   constructor(req: Request, params: Record<string, string> = {}) {
     this.req = req;
     this.params = params;
@@ -72,26 +81,26 @@ export class Context {
   // ==================== Response Helpers ====================
 
   /** Send JSON response */
-  json<T = unknown>(data: T, status = 200): Response {
+  json<T = unknown>(data: T, status?: number): Response {
     return new Response(JSON.stringify(data), {
-      status,
-      headers: { "Content-Type": "application/json" },
+      status: status ?? this.set.status,
+      headers: { "Content-Type": "application/json", ...this.set.headers },
     });
   }
 
   /** Send plain text response */
-  send(data: string, status = 200): Response {
+  send(data: string, status?: number): Response {
     return new Response(data, {
-      status,
-      headers: { "Content-Type": "text/plain" },
+      status: status ?? this.set.status,
+      headers: { "Content-Type": "text/plain", ...this.set.headers },
     });
   }
 
   /** Send HTML response */
-  html(data: string, status = 200): Response {
+  html(data: string, status?: number): Response {
     return new Response(data, {
-      status,
-      headers: { "Content-Type": "text/html" },
+      status: status ?? this.set.status,
+      headers: { "Content-Type": "text/html", ...this.set.headers },
     });
   }
 

@@ -9,8 +9,14 @@ import type {
   HttpMethod,
   KyrinConfig,
 } from "./types";
+import type {
+  MiddlewareHandler,
+  HookHandler,
+  KyrinPlugin,
+} from "../middleware/types";
 import { Router } from "../router/router";
 import { Context } from "../context/context";
+import { compose } from "../middleware/compose";
 
 /**
  * Kyrin Application
@@ -19,6 +25,7 @@ import { Context } from "../context/context";
  * @example
  * ```typescript
  * const app = new Kyrin();
+ * app.use(cors());
  * app.get("/", () => ({ message: "Hello!" }));
  * app.listen(3000);
  * ```
@@ -26,6 +33,9 @@ import { Context } from "../context/context";
 export class Kyrin {
   private router: Router;
   private config: KyrinConfig;
+  private middlewares: MiddlewareHandler[] = [];
+  private requestHooks: HookHandler[] = [];
+  private responseHooks: HookHandler[] = [];
 
   constructor(config: KyrinConfig = {}) {
     this.router = new Router();
@@ -34,6 +44,69 @@ export class Kyrin {
       hostname: config.hostname ?? "localhost",
       development: config.development ?? false,
     };
+  }
+
+  // ==================== Middleware ====================
+
+  /**
+   * Add global middleware or plugin
+   * @example
+   * app.use(cors());
+   * app.use(async (c, next) => { await next(); });
+   */
+  use(middleware: MiddlewareHandler | KyrinPlugin): this {
+    if (typeof middleware === "function") {
+      this.middlewares.push(middleware);
+    } else {
+      if (middleware.middleware) this.middlewares.push(middleware.middleware);
+      if (middleware.onRequest) this.requestHooks.push(middleware.onRequest);
+      if (middleware.onResponse) this.responseHooks.push(middleware.onResponse);
+    }
+    return this;
+  }
+
+  /**
+   * Add hook to run before request handler
+   * @example
+   * app.onRequest((c) => { c.store.start = Date.now(); });
+   */
+  onRequest(handler: HookHandler): this {
+    this.requestHooks.push(handler);
+    return this;
+  }
+
+  /**
+   * Add hook to run after response
+   * @example
+   * app.onResponse((c) => { console.log(`${Date.now() - c.store.start}ms`); });
+   */
+  onResponse(handler: HookHandler): this {
+    this.responseHooks.push(handler);
+    return this;
+  }
+
+  /**
+   * Group routes with a middleware
+   * @example
+   * app.guard(auth, (app) => {
+   *   app.get("/admin", handler);
+   * });
+   */
+  guard(middleware: MiddlewareHandler, fn: (app: Kyrin) => void): this {
+    const guardedApp = new Kyrin();
+    fn(guardedApp);
+
+    for (const route of guardedApp.router.getRoutes()) {
+      const wrappedHandler: Handler = async (c) => {
+        let result: HandlerResponse;
+        await middleware(c, async () => {
+          result = await route.handler(c);
+        });
+        return result!;
+      };
+      this.on(route.method, route.path, wrappedHandler);
+    }
+    return this;
   }
 
   // ==================== Route Methods ====================
@@ -87,17 +160,8 @@ export class Kyrin {
 
   /**
    * Mount a router with a prefix
-   * @param prefix - URL prefix for all routes in the router
-   * @param router - Router instance containing routes
-   *
    * @example
-   * ```typescript
-   * const userRouter = new Router();
-   * userRouter.get("/", handler);      // GET /users
-   * userRouter.get("/:id", handler);   // GET /users/:id
-   *
    * app.route("/users", userRouter);
-   * ```
    */
   route(prefix: string, router: Router): this {
     const routes = router.getRoutes();
@@ -109,37 +173,32 @@ export class Kyrin {
 
   // ==================== Response Helpers ====================
 
-  /**
-   * Auto-detect response type and convert to Response
-   * - Response → as-is
-   * - object → JSON
-   * - string → text/plain
-   * - null/void → 204 No Content
-   */
-  private toResponse(result: HandlerResponse): Response {
+  private toResponse(result: HandlerResponse, ctx: Context): Response {
     if (result instanceof Response) {
       return result;
     }
     if (typeof result === "string") {
       return new Response(result, {
-        headers: { "Content-Type": "text/plain" },
+        status: ctx.set.status,
+        headers: { "Content-Type": "text/plain", ...ctx.set.headers },
       });
     }
     if (result === null || result === undefined) {
       return new Response(null, { status: 204 });
     }
     return new Response(JSON.stringify(result), {
-      headers: { "Content-Type": "application/json" },
+      status: ctx.set.status,
+      headers: { "Content-Type": "application/json", ...ctx.set.headers },
     });
   }
 
   // ==================== Request Handler ====================
 
-  private handleRequest(req: Request): Response | Promise<Response> {
+  private async handleRequest(req: Request): Promise<Response> {
     const method = req.method as HttpMethod;
     const url = req.url;
 
-    // Fast path extraction (avoids new URL())
+    // Fast path extraction
     const queryIndex = url.indexOf("?");
     const pathStart = url.indexOf("/", 8);
     const path =
@@ -149,30 +208,53 @@ export class Kyrin {
 
     const result = this.router.match(method, path);
 
-    if (result) {
-      const ctx = new Context(req, result.params);
-      try {
-        const handlerResult = result.handler(ctx);
-
-        // Avoid async overhead for sync handlers
-        if (handlerResult instanceof Promise) {
-          return handlerResult.then((r) => this.toResponse(r));
-        }
-        return this.toResponse(handlerResult);
-      } catch (error) {
-        console.error("Handler Error:", error);
-        return new Response("Internal Server Error", { status: 500 });
-      }
+    if (!result) {
+      return new Response("Not Found", { status: 404 });
     }
 
-    return new Response("Not Found", { status: 404 });
+    const ctx = new Context(req, result.params);
+
+    try {
+      // Run request hooks
+      for (const hook of this.requestHooks) {
+        const hookResult = await hook(ctx);
+        if (hookResult instanceof Response) return hookResult;
+      }
+
+      let response: Response;
+
+      // No middleware - fast path
+      if (this.middlewares.length === 0) {
+        const handlerResult = await result.handler(ctx);
+        response = this.toResponse(handlerResult, ctx);
+      } else {
+        // With middleware - onion execution
+        const composed = compose(this.middlewares);
+        const middlewareResponse = await composed(ctx, async () => {
+          const handlerResult = await result.handler(ctx);
+          return this.toResponse(handlerResult, ctx);
+        });
+        response =
+          middlewareResponse ??
+          new Response("Internal Server Error", { status: 500 });
+      }
+
+      // Run response hooks
+      for (const hook of this.responseHooks) {
+        await hook(ctx);
+      }
+
+      return response;
+    } catch (error) {
+      console.error("Handler Error:", error);
+      return new Response("Internal Server Error", { status: 500 });
+    }
   }
 
   // ==================== Server ====================
 
   /**
    * Start the HTTP server
-   * @param port - Port number (overrides config)
    */
   listen(port?: number): void {
     const finalPort = port ?? this.config.port!;
