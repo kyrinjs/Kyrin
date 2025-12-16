@@ -131,7 +131,10 @@ export class Model<T extends SchemaColumns> {
   /** Inferred TypeScript type */
   declare $type: InferColumns<T>;
 
-  constructor(public readonly tableName: string, public readonly columns: T) {}
+  constructor(
+    public readonly tableName: string,
+    public readonly columns: T,
+  ) {}
 
   // ==================== SQL Generation ====================
 
@@ -140,6 +143,8 @@ export class Model<T extends SchemaColumns> {
     const cols = Object.entries(this.columns).map(([name, type]) => {
       const sqlType = zodToSqlType(type.zod);
       // Auto primary key for 'id'
+      //
+      // Flag For Fix to Experimental.4 และ ต้องประกาศ function primaryKey() เพื่อให้ userกำหนด ชื่อของ attribute primartkey ได้เอง
       if (name === "id") {
         return `${name} INTEGER PRIMARY KEY AUTOINCREMENT`;
       }
@@ -151,7 +156,7 @@ export class Model<T extends SchemaColumns> {
   /** Get existing columns from database */
   private getExistingColumns(db: Database): string[] {
     const result = db.query<{ name: string }>(
-      `PRAGMA table_info(${this.tableName})`
+      `PRAGMA table_info(${this.tableName})`,
     );
     return result.map((row) => row.name);
   }
@@ -165,7 +170,7 @@ export class Model<T extends SchemaColumns> {
       if (!existing.has(name)) {
         const sqlType = zodToSqlType(type.zod);
         statements.push(
-          `ALTER TABLE ${this.tableName} ADD COLUMN ${name} ${sqlType}`
+          `ALTER TABLE ${this.tableName} ADD COLUMN ${name} ${sqlType}`,
         );
       }
     }
@@ -191,7 +196,7 @@ export class Model<T extends SchemaColumns> {
 
     const placeholders = keys.map(() => "?").join(", ");
     const sql = `INSERT INTO ${this.tableName} (${keys.join(
-      ", "
+      ", ",
     )}) VALUES (${placeholders})`;
     const result = db.run(sql, values);
 
@@ -211,14 +216,14 @@ export class Model<T extends SchemaColumns> {
     const values = Object.values(where);
     return db.query<InferColumns<T>>(
       `SELECT * FROM ${this.tableName} WHERE ${conditions}`,
-      values
+      values,
     );
   }
 
   /** Find one record */
   findOne(
     db: Database,
-    where: Partial<InferColumns<T>>
+    where: Partial<InferColumns<T>>,
   ): InferColumns<T> | null {
     const conditions = Object.keys(where)
       .map((k) => `${k} = ?`)
@@ -226,7 +231,7 @@ export class Model<T extends SchemaColumns> {
     const values = Object.values(where);
     return db.queryOne<InferColumns<T>>(
       `SELECT * FROM ${this.tableName} WHERE ${conditions} LIMIT 1`,
-      values
+      values,
     );
   }
 
@@ -234,7 +239,7 @@ export class Model<T extends SchemaColumns> {
   update(
     db: Database,
     where: Partial<InferColumns<T>>,
-    data: Partial<InferColumns<T>>
+    data: Partial<InferColumns<T>>,
   ): RunResult {
     const setClause = Object.keys(data)
       .map((k) => `${k} = ?`)
@@ -245,7 +250,7 @@ export class Model<T extends SchemaColumns> {
     const values = [...Object.values(data), ...Object.values(where)];
     return db.run(
       `UPDATE ${this.tableName} SET ${setClause} WHERE ${whereClause}`,
-      values
+      values,
     );
   }
 
