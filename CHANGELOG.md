@@ -2,7 +2,7 @@
 
 ## [0.0.1-experimental.2] - 2025-12-15
 
-development mode enabled to see errors and logs in the console
+development mode enabled to see errors and logs in the response
 
 **New stuff:**
 
