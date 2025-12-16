@@ -6,6 +6,16 @@
 import { SQLiteClient } from "./clients/sqlite";
 import { QueryBuilder } from "./query-builder";
 import type { DatabaseConfig, DatabaseClient } from "./types";
+import type { Model } from "../schema/model";
+
+// ==================== Sync Options ====================
+
+export interface SyncOptions {
+  /** Drop and recreate tables (data loss!) */
+  force?: boolean;
+  /** Return SQL without executing */
+  dryRun?: boolean;
+}
 
 // ==================== Connection String Parser ====================
 
@@ -64,6 +74,7 @@ function parseConnectionString(connectionString: string): DatabaseConfig {
  */
 export class Database implements DatabaseClient {
   private client: SQLiteClient;
+  private models: Model<any>[] = [];
 
   constructor(config: DatabaseConfig) {
     switch (config.type) {
@@ -78,6 +89,55 @@ export class Database implements DatabaseClient {
         throw new Error(`Unsupported database type: ${(config as any).type}`);
     }
   }
+
+  // ==================== Schema Management ====================
+
+  /**
+   * Register models for sync
+   * @example `db.register(User, Post)`
+   */
+  register(...models: Model<any>[]): this {
+    this.models.push(...models);
+    return this;
+  }
+
+  /**
+   * Sync database schema with registered models
+   * @param options.force - Drop and recreate tables (default: false)
+   * @param options.dryRun - Return SQL without executing (default: false)
+   * @example
+   * ```typescript
+   * db.sync();                    // Safe mode: add new columns only
+   * db.sync({ force: true });     // Force mode: drop + create
+   * db.sync({ dryRun: true });    // Return SQL strings
+   * ```
+   */
+  sync(options: SyncOptions = {}): string[] | void {
+    const statements: string[] = [];
+
+    for (const model of this.models) {
+      if (options.force) {
+        // Force mode: DROP + CREATE
+        statements.push(`DROP TABLE IF EXISTS ${model.tableName}`);
+        statements.push(model.toCreateSQL());
+      } else {
+        // Safe mode: CREATE IF NOT EXISTS + ALTER for new columns
+        statements.push(model.toCreateSQL());
+        statements.push(...model.toAlterSQL(this));
+      }
+    }
+
+    if (options.dryRun) {
+      return statements;
+    }
+
+    // Execute all statements
+    for (const sql of statements) {
+      this.exec(sql);
+    }
+  }
+
+  // ==================== Query Methods ====================
 
   query<T = unknown>(sql: string, params?: any[]): T[] {
     return this.client.query<T>(sql, params);

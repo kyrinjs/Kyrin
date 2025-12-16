@@ -1,6 +1,26 @@
 # Changelog
 
-## [0.0.1-experimental.2] - 2025-12-15
+## [0.0.1-experimental.3] - 2025-12-17
+
+Auto database schema generation! Define models in TypeScript and sync to SQLite automatically.
+
+**New stuff:**
+
+- `model()` to define database tables
+- Type functions: `string()`, `number()`, `boolean()`, `date()`
+- Modifiers: `.optional()`, `.default()`, `.nullable()`, `.array()`
+- `db.register()` to register models
+- `db.sync()` - safe mode (adds new columns only)
+- `db.sync({ force: true })` - force mode (drops and recreates)
+- `db.sync({ dryRun: true })` - returns SQL without executing
+- CRUD operations: `Model.create()`, `.findAll()`, `.findOne()`, `.update()`, `.delete()`
+- Type inference with `Model.$type`
+
+**Dependencies:**
+
+- Zod v4 bundled internally (users don't need to install)
+
+## [0.0.1-experimental.2] - 2025-12-17
 
 development mode enabled to see errors and logs in the response
 

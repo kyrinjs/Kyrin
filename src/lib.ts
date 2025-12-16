@@ -37,7 +37,12 @@ export type {
   SQLiteConfig,
   RunResult,
   PreparedStatement,
+  SyncOptions,
 } from "./db";
+
+// Schema
+export { model, string, number, boolean, date, Model } from "./schema";
+export type { InferColumns, SchemaColumns } from "./schema";
 
 // Middleware
 export type {

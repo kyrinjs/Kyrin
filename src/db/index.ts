@@ -4,6 +4,7 @@
 
 // Unified Database
 export { Database, database } from "./database";
+export type { SyncOptions } from "./database";
 
 // Clients
 export { SQLiteClient } from "./clients/sqlite";
